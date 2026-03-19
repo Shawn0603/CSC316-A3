@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CSC316 A3 - Salary Explorer (MVP)</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page-wrap">
+      <header class="topbar">
+        <h1>Salary Explorer</h1>
+        <p>
+          Interactive D3.js MVP: compare <strong>average salary (USD)</strong> by job title
+          with simple filters.
+        </p>
+      </header>
+
+      <section class="controls" aria-label="Chart filters">
+        <label>
+          Experience Level
+          <select id="experienceFilter"></select>
+        </label>
+
+        <label>
+          Work Year
+          <select id="yearFilter"></select>
+        </label>
+      </section>
+
+      <section class="chart-card">
+        <div id="chart"></div>
+        <p class="hint">
+          Hover bars for details. Bars animate when filters change.
+        </p>
+      </section>
+    </div>
+
+    <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="main.js"></script>
+  </body>
+</html>

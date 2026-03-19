@@ -1,0 +1,129 @@
+:root {
+  --bg: #f4f7fb;
+  --card: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --accent-dark: #1d4ed8;
+  --grid: #e5e7eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: linear-gradient(180deg, #eef2ff 0%, var(--bg) 30%);
+}
+
+.page-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.topbar h1 {
+  margin: 0 0 8px;
+  font-size: 2rem;
+}
+
+.topbar p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.controls {
+  margin-top: 18px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid #e8ecf5;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: #374151;
+}
+
+select {
+  min-width: 190px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+.chart-card {
+  margin-top: 16px;
+  background: var(--card);
+  border: 1px solid #e8ecf5;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+#chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.axis path,
+.axis line {
+  stroke: #cbd5e1;
+}
+
+.axis text {
+  fill: #4b5563;
+  font-size: 12px;
+}
+
+.grid line {
+  stroke: var(--grid);
+  stroke-dasharray: 2 2;
+}
+
+.bar {
+  fill: var(--accent);
+  transition: fill 150ms ease;
+}
+
+.bar:hover {
+  fill: var(--accent-dark);
+}
+
+.hint {
+  margin: 10px 4px 2px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.tooltip {
+  position: fixed;
+  pointer-events: none;
+  background: rgba(17, 24, 39, 0.95);
+  color: #f9fafb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 10;
+}
+
+.tooltip.show {
+  opacity: 1;
+  transform: translateY(0);
+}
