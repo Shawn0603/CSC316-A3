@@ -53,8 +53,14 @@ const yScale = d3.scaleLinear().range([innerHeight, 0]);
 
 const usdFormatter = d3.format("$,.0f");
 
-// This dictionary keeps raw CSV codes (EN/MI/SE/EX) separate from display text.
-// Why: preserving raw codes makes filtering reliable, while user-facing labels stay clear.
+const moneyRainLayer = g.append("g").attr("class", "money-rain-layer");
+
+let activeMoneyRain = {
+  timerId: null,
+  jobTitle: null,
+};
+
+// label map for experience codes
 const experienceLabelMap = {
   EN: "Entry-level",
   MI: "Mid-level",
@@ -62,8 +68,6 @@ const experienceLabelMap = {
   EX: "Executive-level",
 };
 
-// We pre-aggregate data by (year + experience + title) once.
-// This avoids recalculating from all 13k rows every filter change and keeps interactions smooth.
 function buildAggregates(rows) {
   const grouped = d3.rollup(
     rows,
@@ -89,11 +93,18 @@ function setSelectOptions(select, options) {
 }
 
 function showTooltip(event, d) {
+  // figure out the rank for the tooltip from what's currently on screen
+  const displayedBars = g.selectAll("rect.bar").data();
+  const rankIndex = displayedBars.findIndex((item) => item.job_title === d.job_title);
+  const rankText = rankIndex >= 0 ? `Rank: #${rankIndex + 1} out of ${displayedBars.length}` : "Rank: N/A";
+
   tooltip
     .html(
       `<strong>${d.job_title}</strong><br>` +
         `Average: ${usdFormatter(d.avgSalary)}<br>` +
-        `Records: ${d.count}`
+        `Records: ${d.count}<br>` +
+        // append rank info
+        `${rankText}`
     )
     .classed("show", true)
     .attr("aria-hidden", "false");
@@ -114,9 +125,79 @@ function hideTooltip() {
   tooltip.classed("show", false).attr("aria-hidden", "true");
 }
 
+function stopMoneyRain(removeExisting = false) {
+  if (activeMoneyRain.timerId !== null) {
+    clearInterval(activeMoneyRain.timerId);
+    activeMoneyRain.timerId = null;
+    activeMoneyRain.jobTitle = null;
+  }
+
+  if (removeExisting) {
+    moneyRainLayer.selectAll("rect.money-note").interrupt().remove();
+  }
+}
+
+function spawnMoneyNoteForBar(datum) {
+  const barX = xScale(datum.job_title);
+  const bandWidth = xScale.bandwidth();
+  if (barX === undefined || !Number.isFinite(bandWidth)) return;
+
+  const barTopY = yScale(datum.avgSalary);
+
+  const noteWidth = 10 + Math.random() * 8;
+  const noteHeight = 5 + Math.random() * 4;
+  const xJitter = Math.random() * Math.max(bandWidth - noteWidth, 1);
+  const startX = barX + xJitter;
+
+  const startY = 0;
+
+  const note = moneyRainLayer
+    .append("rect")
+    .attr("class", "money-note")
+    .attr("x", startX)
+    .attr("y", startY)
+    .attr("width", noteWidth)
+    .attr("height", noteHeight)
+    .attr("rx", 1.2)
+    .attr("fill", "#16a34a")
+    .attr("stroke", "#14532d")
+    .attr("stroke-width", 0.5)
+    .attr("opacity", 0.95);
+
+  const duration = 700 + Math.random() * 500;
+
+  note
+    .transition()
+    .duration(duration)
+    .ease(d3.easeLinear)
+    .attr("y", barTopY)
+    .attr("opacity", 0.35)
+    .remove();
+}
+
+function startMoneyRain(datum) {
+  // keep one rain loop active
+  stopMoneyRain(false);
+  activeMoneyRain.jobTitle = datum.job_title;
+
+  const currentMaxSalary = yScale.domain()[1] || 1;
+  const normalized = Math.max(0, Math.min(1, datum.avgSalary / currentMaxSalary));
+
+  const notesPerTick = 1 + Math.round(normalized * 4);
+
+  const intervalMs = Math.max(90, 260 - Math.round(normalized * 140));
+
+  activeMoneyRain.timerId = setInterval(() => {
+    for (let i = 0; i < notesPerTick; i += 1) {
+      spawnMoneyNoteForBar(datum);
+    }
+  }, intervalMs);
+}
+
 function renderChart(data, selectedYear, selectedExp) {
-  // Keep the chart bounded to top N categories to avoid overcrowded labels and many SVG bars.
-  // This is our performance + readability strategy for a large dataset.
+  // reset old rain when chart updates
+  stopMoneyRain(true);
+
   const topN = 12;
   const chartData = data
     .slice()
@@ -168,17 +249,22 @@ function renderChart(data, selectedYear, selectedExp) {
     );
 
   bars
-    .on("mouseenter", showTooltip)
+    .on("mouseover", function (event, d) {
+      showTooltip(event, d);
+      startMoneyRain(d);
+    })
     .on("mousemove", moveTooltip)
-    .on("mouseleave", hideTooltip)
+    .on("mouseout", () => {
+      hideTooltip();
+      // stop and clear rain
+      stopMoneyRain(true);
+    })
     .transition(t)
     .attr("x", (d) => xScale(d.job_title))
     .attr("width", xScale.bandwidth())
     .attr("y", (d) => yScale(d.avgSalary))
     .attr("height", (d) => innerHeight - yScale(d.avgSalary));
 
-  // We translate internal experience codes to readable labels for the title.
-  // This makes the chart self-explanatory for users unfamiliar with dataset abbreviations.
   const expLabel = experienceLabelMap[selectedExp] || selectedExp;
   titleText.text(`Average Salary by Job Title — Year: ${selectedYear}, Experience: ${expLabel}`);
 }
@@ -217,14 +303,12 @@ function initialize(rawRows) {
 
   setSelectOptions(
     experienceFilter,
-    // Keep option value as the raw code (for filtering), but render a human-readable label.
     allExpLevels.map((e) => ({
       value: e,
       label: experienceLabelMap[e] || e,
     }))
   );
 
-  // Pick defaults that are likely meaningful for this salary dataset.
   yearFilter.property("value", allYears[allYears.length - 1]);
   experienceFilter.property("value", "SE");
 

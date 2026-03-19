@@ -9,10 +9,11 @@
   <body>
     <div class="page-wrap">
       <header class="topbar">
-        <h1>Salary Explorer</h1>
-        <p>
-          Interactive D3.js MVP: compare <strong>average salary (USD)</strong> by job title
-          with simple filters.
+        <h2>Salary Explorer</h2>
+        <p class="subtitle">
+          Exploring tech job salaries from 2020 to 2024. You can use the dropdowns below
+          to filter the data by experience level and year. (Try hovering over the bars to
+          see my custom 'money rain' animation!)
         </p>
       </header>
 
@@ -31,9 +32,17 @@
       <section class="chart-card">
         <div id="chart"></div>
         <p class="hint">
-          Hover bars for details. Bars animate when filters change.
+          Tip: Hover over any bar to see the exact average salary and record count.
         </p>
       </section>
+
+      <footer class="page-footer">
+        <p>
+          Data retrieved from
+          <a href="https://www.kaggle.com/datasets/mexwell/data-science-salary-data" target="_blank" rel="noopener noreferrer">Kaggle</a>.
+          Created for CSC316 (Interactive Visualization) Assignment 3.
+        </p>
+      </footer>
     </div>
 
     <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
