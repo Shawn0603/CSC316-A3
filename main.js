@@ -2,6 +2,7 @@ const chartRoot = d3.select("#chart");
 const tooltip = d3.select("#tooltip");
 const experienceFilter = d3.select("#experienceFilter");
 const yearFilter = d3.select("#yearFilter");
+const locationFilter = d3.select("#locationFilter");
 
 const chartWidth = 980;
 const chartHeight = 560;
@@ -90,6 +91,69 @@ function setSelectOptions(select, options) {
     .join("option")
     .attr("value", (d) => d.value)
     .text((d) => d.label);
+}
+
+function renderLocationChart(locationCode, data) {
+  const locChartRoot = d3.select("#locationChart");
+  locChartRoot.selectAll("*").remove();
+
+  const svg2 = locChartRoot.append("svg")
+    .attr("viewBox", `0 0 ${chartWidth} ${chartHeight}`);
+  
+  const g2 = svg2.append("g")
+    .attr("transform", `translate(${margin.left}, ${margin.top})`);
+  
+  svg2.append("text")
+    .attr("x", margin.left)
+    .attr("y", -10)
+    .attr("font-size", 16)
+    .attr("font-weight", 600)
+    .text(`Top 5 Highest Paying Job Titles in ${locationCode}`);
+
+  const filteredByLoc = data.filter(d => d.company_location === locationCode);
+  
+  const aggLocMap = d3.rollup(
+    filteredByLoc,
+    v => d3.mean(v, d => d.salary_in_usd),
+    d => d.job_title
+  );
+  
+  const aggLoc = Array.from(aggLocMap, ([job_title, avg_salary]) => ({job_title, avg_salary}))
+    .sort((a, b) => d3.descending(a.avg_salary, b.avg_salary))
+    .slice(0, 5);
+
+  const locXScale = d3.scaleBand()
+    .range([0, innerWidth])
+    .domain(aggLoc.map(d => d.job_title))
+    .padding(0.2);
+
+  const maxVal = d3.max(aggLoc, d => d.avg_salary) || 0;
+  const locYScale = d3.scaleLinear()
+    .range([innerHeight, 0])
+    .domain([0, maxVal * 1.05]);
+
+  g2.append("g")
+    .attr("transform", `translate(0, ${innerHeight})`)
+    .call(d3.axisBottom(locXScale))
+    .selectAll("text")
+      .attr("transform", "rotate(-15)")
+      .style("text-anchor", "end")
+      .attr("dx", "-.8em")
+      .attr("dy", ".15em");
+
+  g2.append("g")
+    .call(d3.axisLeft(locYScale).tickFormat(d3.format("$,.0f")));
+
+  g2.selectAll("rect")
+    .data(aggLoc)
+    .join("rect")
+    .attr("x", d => locXScale(d.job_title))
+    .attr("y", d => locYScale(d.avg_salary))
+    .attr("width", locXScale.bandwidth())
+    .attr("height", d => innerHeight - locYScale(d.avg_salary))
+    .attr("fill", "#10b981")
+    .on("mouseover", function() { d3.select(this).attr("fill", "#059669"); })
+    .on("mouseout", function() { d3.select(this).attr("fill", "#10b981"); });
 }
 
 function showTooltip(event, d) {
@@ -286,15 +350,18 @@ function flattenAggregateForSelection(aggregateMap, year, exp) {
 function initialize(rawRows) {
   const rows = rawRows
     .map((d) => ({
+      ...d,
+      salary_in_usd: +d.salary_in_usd,
       work_year: d.work_year,
       experience_level: d.experience_level,
       job_title: d.job_title,
-      salary_in_usd: +d.salary_in_usd,
+      company_location: d.company_location
     }))
     .filter((d) => d.work_year && d.experience_level && d.job_title && Number.isFinite(d.salary_in_usd));
 
   const allYears = Array.from(new Set(rows.map((d) => d.work_year))).sort(d3.ascending);
   const allExpLevels = Array.from(new Set(rows.map((d) => d.experience_level))).sort(d3.ascending);
+  const allLocations = Array.from(new Set(rows.map(d => d.company_location))).sort(d3.ascending);
 
   setSelectOptions(
     yearFilter,
@@ -309,8 +376,15 @@ function initialize(rawRows) {
     }))
   );
 
+  setSelectOptions(
+    locationFilter,
+    allLocations.map((l) => ({ value: l, label: l }))
+  );
+
   yearFilter.property("value", allYears[allYears.length - 1]);
   experienceFilter.property("value", "SE");
+  const firstLocation = allLocations[0] || "";
+  locationFilter.property("value", firstLocation);
 
   const aggregates = buildAggregates(rows);
 
@@ -322,10 +396,19 @@ function initialize(rawRows) {
     renderChart(chartData, selectedYear, selectedExp);
   }
 
+  function updateLocationChart() {
+    const selectedLocation = locationFilter.property("value");
+    if (selectedLocation) {
+        renderLocationChart(selectedLocation, rows);
+    }
+  }
+
   yearFilter.on("change", update);
   experienceFilter.on("change", update);
+  locationFilter.on("change", updateLocationChart);
 
   update();
+  updateLocationChart();
 }
 
 d3.csv("data/salaries.csv")

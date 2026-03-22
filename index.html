@@ -29,11 +29,19 @@
         </label>
       </section>
 
-      <section class="chart-card">
+      <section class="chart-container">
         <div id="chart"></div>
-        <p class="hint">
-          Tip: Hover over any bar to see the exact average salary and record count.
-        </p>
+      </section>
+
+      <section class="controls" aria-label="Location chart filters">
+        <label>
+          Company Location (Country Code)
+          <select id="locationFilter"></select>
+        </label>
+      </section>
+
+      <section class="chart-container">
+        <div id="locationChart"></div>
       </section>
 
       <footer class="page-footer">
