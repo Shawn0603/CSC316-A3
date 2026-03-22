@@ -1,11 +1,11 @@
 :root {
-  --bg: #f4f7fb;
-  --card: #ffffff;
-  --text: #1f2937;
-  --muted: #6b7280;
-  --accent: #2563eb;
-  --accent-dark: #1d4ed8;
-  --grid: #e5e7eb;
+  --bg: #121212;
+  --card: #1e1e1e;
+  --text: #e0e0e0;
+  --muted: #a0a0a0;
+  --accent: #d4af37; /* Premium Gold */
+  --accent-dark: #b5952f;
+  --grid: #333333;
 }
 
 * {
@@ -16,64 +16,84 @@ body {
   margin: 0;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
-  background: linear-gradient(180deg, #eef2ff 0%, var(--bg) 30%);
+  background: var(--bg);
 }
 
 .page-wrap {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 32px 24px;
+}
+
+.topbar {
+  margin-bottom: 32px;
 }
 
 .topbar h2 {
-  margin: 0 0 8px;
-  font-size: 2rem;
+  margin: 0 0 12px;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.5px;
 }
 
 .topbar .subtitle {
   margin: 0;
   color: var(--muted);
-  max-width: 900px;
-  line-height: 1.55;
+  max-width: 800px;
+  line-height: 1.6;
+  font-size: 1.1rem;
 }
 
 .controls {
-  margin-top: 18px;
+  margin-bottom: 24px;
   display: flex;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
   background: var(--card);
-  border: 1px solid #e8ecf5;
+  border: 1px solid #2a2a2a;
   border-radius: 12px;
-  padding: 14px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .controls label {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   font-size: 0.95rem;
-  color: #374151;
+  font-weight: 500;
+  color: #cccccc;
 }
 
 select {
-  min-width: 190px;
-  border: 1px solid #d1d5db;
+  min-width: 200px;
+  border: 1px solid #444444;
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 10px 14px;
   font-size: 0.95rem;
-  background: #fff;
+  background: #2a2a2a;
+  color: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.chart-card {
-  margin-top: 16px;
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.2);
+}
+
+.chart-container, .chart-card {
+  margin-bottom: 32px;
   background: var(--card);
-  border: 1px solid #e8ecf5;
-  border-radius: 14px;
-  padding: 14px;
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
-#chart svg {
+#chart svg, #locationChart svg {
   width: 100%;
   height: auto;
   display: block;
@@ -81,53 +101,56 @@ select {
 
 .axis path,
 .axis line {
-  stroke: #cbd5e1;
+  display: none;
 }
 
 .axis text {
-  fill: #4b5563;
+  fill: #a0a0a0;
   font-size: 12px;
 }
 
 .grid line {
-  stroke: var(--grid);
-  stroke-dasharray: 2 2;
+  stroke: #222222;
+  stroke-dasharray: 4 4;
+}
+
+.grid path {
+  display: none;
 }
 
 .bar {
-  fill: var(--accent);
-  transition: fill 150ms ease;
-}
-
-.bar:hover {
-  fill: var(--accent-dark);
+  transition: all 200ms ease;
+  rx: 4px;
 }
 
 .hint {
-  margin: 10px 4px 2px;
+  margin: 16px 4px 4px;
   color: var(--muted);
   font-size: 0.9rem;
+  font-style: italic;
 }
 
 .page-footer {
-  margin-top: 18px;
+  margin-top: 40px;
   background: var(--card);
-  border: 1px solid #e8ecf5;
+  border: 1px solid #2a2a2a;
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 16px 20px;
+  text-align: center;
 }
 
 .page-footer p {
   margin: 0;
-  color: #4b5563;
-  font-size: 0.92rem;
-  line-height: 1.5;
+  color: #a0a0a0;
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
 .page-footer a {
   color: var(--accent);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
+  transition: color 0.2s ease;
 }
 
 .page-footer a:hover,
@@ -139,17 +162,18 @@ select {
 .tooltip {
   position: fixed;
   pointer-events: none;
-  background: rgba(17, 24, 39, 0.95);
-  color: #f9fafb;
+  background: rgba(30, 30, 30, 0.98);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 0.85rem;
-  line-height: 1.35;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  line-height: 1.5;
   opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 120ms ease, transform 120ms ease;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  z-index: 10;
+  transform: translateY(8px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
 }
 
 .tooltip.show {

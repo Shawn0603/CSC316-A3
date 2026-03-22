@@ -28,6 +28,7 @@ const titleText = svg
   .attr("y", 24)
   .attr("font-size", 16)
   .attr("font-weight", 600)
+  .attr("fill", "#e0e0e0")
   .text("Average Salary by Job Title");
 
 const xLabel = svg
@@ -35,7 +36,7 @@ const xLabel = svg
   .attr("x", margin.left + innerWidth / 2)
   .attr("y", chartHeight - 16)
   .attr("text-anchor", "middle")
-  .attr("fill", "#374151")
+  .attr("fill", "#a0a0a0")
   .attr("font-size", 12)
   .text("Job Title (Top 12 by average salary)");
 
@@ -45,7 +46,7 @@ const yLabel = svg
   .attr("y", 20)
   .attr("transform", "rotate(-90)")
   .attr("text-anchor", "middle")
-  .attr("fill", "#374151")
+  .attr("fill", "#a0a0a0")
   .attr("font-size", 12)
   .text("Average Salary (USD)");
 
@@ -54,11 +55,15 @@ const yScale = d3.scaleLinear().range([innerHeight, 0]);
 
 const usdFormatter = d3.format("$,.0f");
 
+const pileLayer = g.append("g").attr("class", "pile-layer");
 const moneyRainLayer = g.append("g").attr("class", "money-rain-layer");
 
 let activeMoneyRain = {
   timerId: null,
   jobTitle: null,
+  accumulatedHeight: 0,
+  maxStackHeight: 0,
+  barTopY: 0
 };
 
 // label map for experience codes
@@ -108,9 +113,15 @@ function renderLocationChart(locationCode, data) {
     .attr("y", -10)
     .attr("font-size", 16)
     .attr("font-weight", 600)
+    .attr("fill", "#e0e0e0")
     .text(`Top 5 Highest Paying Job Titles in ${locationCode}`);
 
-  const filteredByLoc = data.filter(d => d.company_location === locationCode);
+  const filteredByLoc = [];
+  for (let i = 0; i < data.length; i++) {
+    if (data[i].company_location === locationCode) {
+      filteredByLoc.push(data[i]);
+    }
+  }
   
   const aggLocMap = d3.rollup(
     filteredByLoc,
@@ -118,9 +129,18 @@ function renderLocationChart(locationCode, data) {
     d => d.job_title
   );
   
-  const aggLoc = Array.from(aggLocMap, ([job_title, avg_salary]) => ({job_title, avg_salary}))
-    .sort((a, b) => d3.descending(a.avg_salary, b.avg_salary))
-    .slice(0, 5);
+  let aggLoc = [];
+  for (const [job_title, avg_salary] of aggLocMap.entries()) {
+    aggLoc.push({ job_title: job_title, avg_salary: avg_salary });
+  }
+  
+  // Sort from highest to lowest salary
+  aggLoc.sort(function(a, b) {
+    return b.avg_salary - a.avg_salary;
+  });
+  
+  // Take top 5
+  aggLoc = aggLoc.slice(0, 5);
 
   const locXScale = d3.scaleBand()
     .range([0, innerWidth])
@@ -131,6 +151,9 @@ function renderLocationChart(locationCode, data) {
   const locYScale = d3.scaleLinear()
     .range([innerHeight, 0])
     .domain([0, maxVal * 1.05]);
+
+  const locColorScale = d3.scaleSequential(t => d3.interpolateBlues(0.3 + 0.7 * t))
+    .domain([0, maxVal]);
 
   g2.append("g")
     .attr("transform", `translate(0, ${innerHeight})`)
@@ -151,16 +174,44 @@ function renderLocationChart(locationCode, data) {
     .attr("y", d => locYScale(d.avg_salary))
     .attr("width", locXScale.bandwidth())
     .attr("height", d => innerHeight - locYScale(d.avg_salary))
-    .attr("fill", "#10b981")
-    .on("mouseover", function() { d3.select(this).attr("fill", "#059669"); })
-    .on("mouseout", function() { d3.select(this).attr("fill", "#10b981"); });
+    .attr("fill", d => locColorScale(d.avg_salary))
+    .attr("rx", 4)
+    .style("transition", "all 200ms ease")
+    .on("mouseover", function(event, d) { 
+      d3.select(this).interrupt();
+      d3.select(this)
+        .style("fill", "transparent")
+        .attr("fill", "none")
+        .attr("stroke", locColorScale(d.avg_salary))
+        .attr("stroke-width", "2px")
+        .attr("stroke-dasharray", "4 2"); 
+    })
+    .on("mouseout", function(event, d) { 
+      d3.select(this).interrupt();
+      d3.select(this)
+        .style("fill", null)
+        .attr("fill", locColorScale(d.avg_salary))
+        .attr("stroke", "none")
+        .attr("stroke-width", "0px")
+        .attr("stroke-dasharray", "none"); 
+    });
 }
 
 function showTooltip(event, d) {
   // figure out the rank for the tooltip from what's currently on screen
   const displayedBars = g.selectAll("rect.bar").data();
-  const rankIndex = displayedBars.findIndex((item) => item.job_title === d.job_title);
-  const rankText = rankIndex >= 0 ? `Rank: #${rankIndex + 1} out of ${displayedBars.length}` : "Rank: N/A";
+  let rankIndex = -1;
+  for (let i = 0; i < displayedBars.length; i++) {
+    if (displayedBars[i].job_title === d.job_title) {
+      rankIndex = i;
+      break;
+    }
+  }
+  
+  let rankText = "Rank: N/A";
+  if (rankIndex >= 0) {
+    rankText = `Rank: #${rankIndex + 1} out of ${displayedBars.length}`;
+  }
 
   tooltip
     .html(
@@ -198,6 +249,7 @@ function stopMoneyRain(removeExisting = false) {
 
   if (removeExisting) {
     moneyRainLayer.selectAll("rect.money-note").interrupt().remove();
+    pileLayer.selectAll("*").remove();
   }
 }
 
@@ -214,6 +266,10 @@ function spawnMoneyNoteForBar(datum) {
   const startX = barX + xJitter;
 
   const startY = 0;
+  let currentDropY = innerHeight - activeMoneyRain.accumulatedHeight - noteHeight;
+  if (currentDropY < activeMoneyRain.barTopY) {
+    currentDropY = activeMoneyRain.barTopY;
+  }
 
   const note = moneyRainLayer
     .append("rect")
@@ -223,26 +279,54 @@ function spawnMoneyNoteForBar(datum) {
     .attr("width", noteWidth)
     .attr("height", noteHeight)
     .attr("rx", 1.2)
-    .attr("fill", "#16a34a")
-    .attr("stroke", "#14532d")
+    .attr("fill", "#10b981")
+    .attr("stroke", "#059669")
     .attr("stroke-width", 0.5)
     .attr("opacity", 0.95);
 
-  const duration = 700 + Math.random() * 500;
+  const duration = 500 + Math.random() * 400;
 
   note
     .transition()
     .duration(duration)
     .ease(d3.easeLinear)
-    .attr("y", barTopY)
-    .attr("opacity", 0.35)
-    .remove();
+    .attr("y", currentDropY)
+    .on("end", function() {
+      d3.select(this).remove();
+      if (activeMoneyRain.accumulatedHeight < activeMoneyRain.maxStackHeight) {
+        const growth = noteHeight * 0.4;
+        activeMoneyRain.accumulatedHeight += growth;
+        if (activeMoneyRain.accumulatedHeight > activeMoneyRain.maxStackHeight) {
+          activeMoneyRain.accumulatedHeight = activeMoneyRain.maxStackHeight;
+        }
+        d3.select("#money-pile")
+          .attr("y", innerHeight - activeMoneyRain.accumulatedHeight)
+          .attr("height", activeMoneyRain.accumulatedHeight);
+      }
+    });
 }
 
 function startMoneyRain(datum) {
   // keep one rain loop active
-  stopMoneyRain(false);
+  stopMoneyRain(true);
   activeMoneyRain.jobTitle = datum.job_title;
+  activeMoneyRain.barTopY = yScale(datum.avgSalary);
+  activeMoneyRain.maxStackHeight = innerHeight - activeMoneyRain.barTopY;
+  activeMoneyRain.accumulatedHeight = 0;
+
+  const barX = xScale(datum.job_title);
+  const bandWidth = xScale.bandwidth();
+
+  pileLayer.selectAll("*").remove();
+  pileLayer.append("rect")
+    .attr("id", "money-pile")
+    .attr("x", barX)
+    .attr("y", innerHeight)
+    .attr("width", bandWidth)
+    .attr("height", 0)
+    .attr("fill", "#10b981")
+    .attr("opacity", 0.85)
+    .attr("rx", 2);
 
   const currentMaxSalary = yScale.domain()[1] || 1;
   const normalized = Math.max(0, Math.min(1, datum.avgSalary / currentMaxSalary));
@@ -263,13 +347,23 @@ function renderChart(data, selectedYear, selectedExp) {
   stopMoneyRain(true);
 
   const topN = 12;
-  const chartData = data
-    .slice()
-    .sort((a, b) => d3.descending(a.avgSalary, b.avgSalary))
-    .slice(0, topN);
+  let chartData = data.slice();
+  
+  // Sort from highest to lowest salary
+  chartData.sort(function(a, b) {
+    return b.avgSalary - a.avgSalary;
+  });
+  
+  // Take top N
+  chartData = chartData.slice(0, topN);
+
+  const maxVal = d3.max(chartData, (d) => d.avgSalary) || 1;
 
   xScale.domain(chartData.map((d) => d.job_title));
-  yScale.domain([0, d3.max(chartData, (d) => d.avgSalary) || 1]).nice();
+  yScale.domain([0, maxVal]).nice();
+
+  const colorScale = d3.scaleSequential(t => d3.interpolateBlues(0.3 + 0.7 * t))
+    .domain([0, maxVal]);
 
   const t = svg.transition().duration(700).ease(d3.easeCubicOut);
 
@@ -314,11 +408,28 @@ function renderChart(data, selectedYear, selectedExp) {
 
   bars
     .on("mouseover", function (event, d) {
+      // Interrupt any running transition so hover applies instantly
+      d3.select(this).interrupt();
+      
+      d3.select(this)
+        .style("fill", "transparent") // completely transparent via style
+        .attr("fill", "none") // and attr, just to be safe
+        .attr("stroke", colorScale(d.avgSalary))
+        .attr("stroke-width", "2px");
+
       showTooltip(event, d);
       startMoneyRain(d);
     })
     .on("mousemove", moveTooltip)
-    .on("mouseout", () => {
+    .on("mouseout", function (event, d) {
+      d3.select(this).interrupt();
+      
+      d3.select(this)
+        .style("fill", null) // remove style override
+        .attr("fill", colorScale(d.avgSalary)) // restore attr
+        .attr("stroke", "none")
+        .attr("stroke-width", "0px");
+
       hideTooltip();
       // stop and clear rain
       stopMoneyRain(true);
@@ -327,7 +438,8 @@ function renderChart(data, selectedYear, selectedExp) {
     .attr("x", (d) => xScale(d.job_title))
     .attr("width", xScale.bandwidth())
     .attr("y", (d) => yScale(d.avgSalary))
-    .attr("height", (d) => innerHeight - yScale(d.avgSalary));
+    .attr("height", (d) => innerHeight - yScale(d.avgSalary))
+    .attr("fill", (d) => colorScale(d.avgSalary));
 
   const expLabel = experienceLabelMap[selectedExp] || selectedExp;
   titleText.text(`Average Salary by Job Title — Year: ${selectedYear}, Experience: ${expLabel}`);
@@ -335,33 +447,59 @@ function renderChart(data, selectedYear, selectedExp) {
 
 function flattenAggregateForSelection(aggregateMap, year, exp) {
   const yearMap = aggregateMap.get(year);
-  if (!yearMap) return [];
+  if (!yearMap) {
+    return [];
+  }
 
   const expMap = yearMap.get(exp);
-  if (!expMap) return [];
+  if (!expMap) {
+    return [];
+  }
 
-  return Array.from(expMap, ([job_title, stats]) => ({
-    job_title,
-    avgSalary: stats.avgSalary,
-    count: stats.count,
-  }));
+  const result = [];
+  for (const [job_title, stats] of expMap.entries()) {
+    result.push({
+      job_title: job_title,
+      avgSalary: stats.avgSalary,
+      count: stats.count,
+    });
+  }
+
+  return result;
 }
 
 function initialize(rawRows) {
-  const rows = rawRows
-    .map((d) => ({
-      ...d,
-      salary_in_usd: +d.salary_in_usd,
-      work_year: d.work_year,
-      experience_level: d.experience_level,
-      job_title: d.job_title,
-      company_location: d.company_location
-    }))
-    .filter((d) => d.work_year && d.experience_level && d.job_title && Number.isFinite(d.salary_in_usd));
+  const rows = [];
+  
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    const parsedSalary = Number(row.salary_in_usd);
+    
+    if (row.work_year && row.experience_level && row.job_title && Number.isFinite(parsedSalary)) {
+      rows.push({
+        ...row,
+        salary_in_usd: parsedSalary,
+        work_year: row.work_year,
+        experience_level: row.experience_level,
+        job_title: row.job_title,
+        company_location: row.company_location
+      });
+    }
+  }
 
-  const allYears = Array.from(new Set(rows.map((d) => d.work_year))).sort(d3.ascending);
-  const allExpLevels = Array.from(new Set(rows.map((d) => d.experience_level))).sort(d3.ascending);
-  const allLocations = Array.from(new Set(rows.map(d => d.company_location))).sort(d3.ascending);
+  const allYearsSet = new Set();
+  const allExpLevelsSet = new Set();
+  const allLocationsSet = new Set();
+  
+  for (let i = 0; i < rows.length; i++) {
+    allYearsSet.add(rows[i].work_year);
+    allExpLevelsSet.add(rows[i].experience_level);
+    allLocationsSet.add(rows[i].company_location);
+  }
+
+  const allYears = Array.from(allYearsSet).sort(d3.ascending);
+  const allExpLevels = Array.from(allExpLevelsSet).sort(d3.ascending);
+  const allLocations = Array.from(allLocationsSet).sort(d3.ascending);
 
   setSelectOptions(
     yearFilter,
