@@ -98,12 +98,38 @@ function setSelectOptions(select, options) {
 }
 
 function renderLocationChart(data) {
+  function getFlagEmoji(countryCode) {
+    if (!countryCode || countryCode.length !== 2) return '';
+    const codePoints = countryCode
+      .toUpperCase()
+      .split('')
+      .map(char => 127397 + char.charCodeAt(0));
+    return String.fromCodePoint(...codePoints);
+  }
+
   const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
   const locChartRoot = d3.select("#locationChart");
   locChartRoot.selectAll("*").remove();
 
   const svg2 = locChartRoot.append("svg")
     .attr("viewBox", `0 0 ${chartWidth} ${chartHeight}`);
+
+  const defs = svg2.append("defs");
+  
+  const glowFilter = defs.append("filter")
+    .attr("id", "glow")
+    .attr("x", "-30%")
+    .attr("y", "-30%")
+    .attr("width", "160%")
+    .attr("height", "160%");
+    
+  glowFilter.append("feGaussianBlur")
+    .attr("stdDeviation", "6")
+    .attr("result", "blur");
+    
+  const feMerge = glowFilter.append("feMerge");
+  feMerge.append("feMergeNode").attr("in", "blur");
+  feMerge.append("feMergeNode").attr("in", "SourceGraphic");
   
   const g2 = svg2.append("g")
     .attr("transform", `translate(${margin.left}, ${margin.top})`);
@@ -138,6 +164,24 @@ function renderLocationChart(data) {
   const rScale = d3.scaleSqrt().domain([0, maxVal]).range([20, 110]);
   const colorScale = d3.scaleSequential(d3.interpolateCool).domain([0, maxVal]);
 
+  const gradients = defs.selectAll("radialGradient")
+    .data(aggLoc)
+    .join("radialGradient")
+    .attr("id", d => `grad-${d.country}`)
+    .attr("cx", "30%")
+    .attr("cy", "30%")
+    .attr("r", "70%");
+
+  gradients.append("stop")
+    .attr("offset", "0%")
+    .attr("stop-color", d => d3.color(colorScale(d.avg_salary)).brighter(1.2))
+    .attr("stop-opacity", 1);
+
+  gradients.append("stop")
+    .attr("offset", "100%")
+    .attr("stop-color", d => colorScale(d.avg_salary))
+    .attr("stop-opacity", 1);
+
   if (window.locSimulation) {
     window.locSimulation.stop();
   }
@@ -153,38 +197,78 @@ function renderLocationChart(data) {
     .join("g")
     .style("cursor", "grab")
     .call(d3.drag()
-      .on("start", (event, d) => { d.fx = d.x; d.fy = d.y; })
+      .on("start", (event, d) => { d.fx = d.x; d.fy = d.y; d3.select(event.sourceEvent.target.parentNode).style("cursor", "grabbing"); })
       .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
-      .on("end", (event, d) => { d.fx = null; d.fy = null; })
-    );
+      .on("end", (event, d) => { d.fx = null; d.fy = null; d3.select(event.sourceEvent.target.parentNode).style("cursor", "grab"); })
+    )
+    .on("mouseover", function(event, d) {
+      d3.select(this).select("circle")
+        .transition().duration(200)
+        .attr("r", rScale(d.avg_salary) * 1.05)
+        .attr("stroke-opacity", 0.8)
+        .attr("stroke-width", 2);
+        
+      d3.select(this).select("tspan.country-text")
+        .transition().duration(200)
+        .style("font-size", "16px");
+
+      d3.select(this).select("tspan.salary-text")
+        .transition().duration(200)
+        .style("font-size", "18px");
+    })
+    .on("mouseout", function(event, d) {
+      d3.select(this).select("circle")
+        .transition().duration(200)
+        .attr("r", rScale(d.avg_salary))
+        .attr("stroke-opacity", 0.3)
+        .attr("stroke-width", 1);
+        
+      d3.select(this).select("tspan.country-text")
+        .transition().duration(200)
+        .style("font-size", "14px");
+
+      d3.select(this).select("tspan.salary-text")
+        .transition().duration(200)
+        .style("font-size", "16px");
+    });
 
   nodes.append("circle")
     .attr("r", d => rScale(d.avg_salary))
-    .attr("fill", d => colorScale(d.avg_salary));
+    .attr("fill", d => `url(#grad-${d.country})`)
+    .style("filter", "url(#glow)")
+    .attr("stroke", "#ffffff")
+    .attr("stroke-opacity", 0.3)
+    .attr("stroke-width", 1);
 
   const texts = nodes.append("text")
     .attr("text-anchor", "middle")
     .attr("dominant-baseline", "middle")
     .attr("fill", "#ffffff")
-    .style("pointer-events", "none");
+    .style("pointer-events", "none")
+    .style("text-shadow", "0px 2px 4px rgba(0,0,0,0.8), 0px 0px 2px rgba(0,0,0,0.5)");
 
   texts.append("tspan")
+    .attr("class", "country-text")
     .attr("x", 0)
-    .attr("dy", "-0.4em")
+    .attr("dy", "-0.5em")
     .style("font-size", "14px")
-    .style("font-weight", "bold")
+    .style("font-weight", "500")
     .text(d => {
+      let fullName = d.country;
       try {
-        return regionNames.of(d.country) || d.country;
+        fullName = regionNames.of(d.country) || d.country;
       } catch (e) {
-        return d.country;
+        fullName = d.country;
       }
+      return `${getFlagEmoji(d.country)} ${fullName}`;
     });
 
   texts.append("tspan")
+    .attr("class", "salary-text")
     .attr("x", 0)
-    .attr("dy", "1.2em")
-    .style("font-size", "12px")
+    .attr("dy", "1.3em")
+    .style("font-size", "16px")
+    .style("font-weight", "800")
     .text(d => d3.format("$,.0f")(d.avg_salary));
 
   window.locSimulation.on("tick", () => {
