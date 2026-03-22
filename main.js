@@ -284,7 +284,7 @@ function spawnMoneyNoteForBar(datum) {
     .attr("stroke-width", 0.5)
     .attr("opacity", 0.95);
 
-  const duration = 500 + Math.random() * 400;
+  const duration = 1500 + Math.random() * 1000;
 
   note
     .transition()
@@ -294,7 +294,7 @@ function spawnMoneyNoteForBar(datum) {
     .on("end", function() {
       d3.select(this).remove();
       if (activeMoneyRain.accumulatedHeight < activeMoneyRain.maxStackHeight) {
-        const growth = noteHeight * 0.4;
+        const growth = noteHeight * 0.15;
         activeMoneyRain.accumulatedHeight += growth;
         if (activeMoneyRain.accumulatedHeight > activeMoneyRain.maxStackHeight) {
           activeMoneyRain.accumulatedHeight = activeMoneyRain.maxStackHeight;
@@ -331,9 +331,9 @@ function startMoneyRain(datum) {
   const currentMaxSalary = yScale.domain()[1] || 1;
   const normalized = Math.max(0, Math.min(1, datum.avgSalary / currentMaxSalary));
 
-  const notesPerTick = 1 + Math.round(normalized * 4);
+  const notesPerTick = 1 + Math.round(normalized * 3);
 
-  const intervalMs = Math.max(90, 260 - Math.round(normalized * 140));
+  const intervalMs = Math.max(200, 500 - Math.round(normalized * 250));
 
   activeMoneyRain.timerId = setInterval(() => {
     for (let i = 0; i < notesPerTick; i += 1) {
