@@ -2,7 +2,6 @@ const chartRoot = d3.select("#chart");
 const tooltip = d3.select("#tooltip");
 const experienceFilter = d3.select("#experienceFilter");
 const yearFilter = d3.select("#yearFilter");
-const locationFilter = d3.select("#locationFilter");
 
 const chartWidth = 980;
 const chartHeight = 560;
@@ -98,7 +97,8 @@ function setSelectOptions(select, options) {
     .text((d) => d.label);
 }
 
-function renderLocationChart(locationCode, data) {
+function renderLocationChart(data) {
+  const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
   const locChartRoot = d3.select("#locationChart");
   locChartRoot.selectAll("*").remove();
 
@@ -114,87 +114,94 @@ function renderLocationChart(locationCode, data) {
     .attr("font-size", 16)
     .attr("font-weight", 600)
     .attr("fill", "#e0e0e0")
-    .text(`Top 5 Highest Paying Job Titles in ${locationCode}`);
+    .text(`Top 5 Countries by Average Salary`);
 
-  const filteredByLoc = [];
-  for (let i = 0; i < data.length; i++) {
-    if (data[i].company_location === locationCode) {
-      filteredByLoc.push(data[i]);
-    }
-  }
-  
   const aggLocMap = d3.rollup(
-    filteredByLoc,
+    data,
     v => d3.mean(v, d => d.salary_in_usd),
-    d => d.job_title
+    d => d.company_location
   );
   
   let aggLoc = [];
-  for (const [job_title, avg_salary] of aggLocMap.entries()) {
-    aggLoc.push({ job_title: job_title, avg_salary: avg_salary });
+  for (const [country, avg_salary] of aggLocMap.entries()) {
+    aggLoc.push({ country: country, avg_salary: avg_salary });
   }
   
-  // Sort from highest to lowest salary
   aggLoc.sort(function(a, b) {
     return b.avg_salary - a.avg_salary;
   });
   
-  // Take top 5
   aggLoc = aggLoc.slice(0, 5);
 
-  const locXScale = d3.scaleBand()
-    .range([0, innerWidth])
-    .domain(aggLoc.map(d => d.job_title))
-    .padding(0.2);
-
   const maxVal = d3.max(aggLoc, d => d.avg_salary) || 0;
-  const locYScale = d3.scaleLinear()
-    .range([innerHeight, 0])
-    .domain([0, maxVal * 1.05]);
 
-  const locColorScale = d3.scaleSequential(t => d3.interpolateBlues(0.3 + 0.7 * t))
-    .domain([0, maxVal]);
+  const rScale = d3.scaleSqrt().domain([0, maxVal]).range([20, 110]);
+  const colorScale = d3.scaleSequential(d3.interpolateCool).domain([0, maxVal]);
 
-  g2.append("g")
-    .attr("transform", `translate(0, ${innerHeight})`)
-    .call(d3.axisBottom(locXScale))
-    .selectAll("text")
-      .attr("transform", "rotate(-15)")
-      .style("text-anchor", "end")
-      .attr("dx", "-.8em")
-      .attr("dy", ".15em");
+  if (window.locSimulation) {
+    window.locSimulation.stop();
+  }
 
-  g2.append("g")
-    .call(d3.axisLeft(locYScale).tickFormat(d3.format("$,.0f")));
+  window.locSimulation = d3.forceSimulation(aggLoc)
+    .force("collide", d3.forceCollide().radius(d => rScale(d.avg_salary) + 2).iterations(4).strength(1))
+    .force("x", d3.forceX(innerWidth / 2).strength(0.01))
+    .force("y", d3.forceY(innerHeight / 2).strength(0.01))
+    .alphaDecay(0);
 
-  g2.selectAll("rect")
+  const nodes = g2.selectAll("g")
     .data(aggLoc)
-    .join("rect")
-    .attr("x", d => locXScale(d.job_title))
-    .attr("y", d => locYScale(d.avg_salary))
-    .attr("width", locXScale.bandwidth())
-    .attr("height", d => innerHeight - locYScale(d.avg_salary))
-    .attr("fill", d => locColorScale(d.avg_salary))
-    .attr("rx", 4)
-    .style("transition", "all 200ms ease")
-    .on("mouseover", function(event, d) { 
-      d3.select(this).interrupt();
-      d3.select(this)
-        .style("fill", "transparent")
-        .attr("fill", "none")
-        .attr("stroke", locColorScale(d.avg_salary))
-        .attr("stroke-width", "2px")
-        .attr("stroke-dasharray", "4 2"); 
-    })
-    .on("mouseout", function(event, d) { 
-      d3.select(this).interrupt();
-      d3.select(this)
-        .style("fill", null)
-        .attr("fill", locColorScale(d.avg_salary))
-        .attr("stroke", "none")
-        .attr("stroke-width", "0px")
-        .attr("stroke-dasharray", "none"); 
+    .join("g")
+    .style("cursor", "grab")
+    .call(d3.drag()
+      .on("start", (event, d) => { d.fx = d.x; d.fy = d.y; })
+      .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
+      .on("end", (event, d) => { d.fx = null; d.fy = null; })
+    );
+
+  nodes.append("circle")
+    .attr("r", d => rScale(d.avg_salary))
+    .attr("fill", d => colorScale(d.avg_salary));
+
+  const texts = nodes.append("text")
+    .attr("text-anchor", "middle")
+    .attr("dominant-baseline", "middle")
+    .attr("fill", "#ffffff")
+    .style("pointer-events", "none");
+
+  texts.append("tspan")
+    .attr("x", 0)
+    .attr("dy", "-0.4em")
+    .style("font-size", "14px")
+    .style("font-weight", "bold")
+    .text(d => {
+      try {
+        return regionNames.of(d.country) || d.country;
+      } catch (e) {
+        return d.country;
+      }
     });
+
+  texts.append("tspan")
+    .attr("x", 0)
+    .attr("dy", "1.2em")
+    .style("font-size", "12px")
+    .text(d => d3.format("$,.0f")(d.avg_salary));
+
+  window.locSimulation.on("tick", () => {
+    for (let i = 0; i < aggLoc.length; i++) {
+      let d = aggLoc[i];
+      let r = rScale(d.avg_salary);
+      
+      d.vx += (Math.random() - 0.5) * 0.4;
+      d.vy += (Math.random() - 0.5) * 0.4;
+
+      if (d.x - r < 0) { d.x = r; d.vx *= -1; }
+      if (d.x + r > innerWidth) { d.x = innerWidth - r; d.vx *= -1; }
+      if (d.y - r < 0) { d.y = r; d.vy *= -1; }
+      if (d.y + r > innerHeight) { d.y = innerHeight - r; d.vy *= -1; }
+    }
+    nodes.attr("transform", d => `translate(${d.x}, ${d.y})`);
+  });
 }
 
 function showTooltip(event, d) {
@@ -514,15 +521,8 @@ function initialize(rawRows) {
     }))
   );
 
-  setSelectOptions(
-    locationFilter,
-    allLocations.map((l) => ({ value: l, label: l }))
-  );
-
   yearFilter.property("value", allYears[allYears.length - 1]);
   experienceFilter.property("value", "SE");
-  const firstLocation = allLocations[0] || "";
-  locationFilter.property("value", firstLocation);
 
   const aggregates = buildAggregates(rows);
 
@@ -535,15 +535,11 @@ function initialize(rawRows) {
   }
 
   function updateLocationChart() {
-    const selectedLocation = locationFilter.property("value");
-    if (selectedLocation) {
-        renderLocationChart(selectedLocation, rows);
-    }
+    renderLocationChart(rows);
   }
 
   yearFilter.on("change", update);
   experienceFilter.on("change", update);
-  locationFilter.on("change", updateLocationChart);
 
   update();
   updateLocationChart();
