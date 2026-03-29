@@ -180,3 +180,25 @@ select:focus {
   opacity: 1;
   transform: translateY(0);
 }
+
+/* Beeswarm Controls */
+.beeswarm-controls button.b-btn {
+  background-color: #334155;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  font-size: 14px;
+}
+.beeswarm-controls button.b-btn:hover {
+  background-color: #475569;
+}
+.beeswarm-controls button.b-btn.active {
+  background-color: #10b981;
+  border-color: #059669;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}

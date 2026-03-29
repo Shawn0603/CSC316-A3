@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CSC316 A3 - Salary Explorer (MVP)</title>
-    <link rel="stylesheet" href="style.css?v=1774717509" />
+    <link rel="stylesheet" href="style.css?v=1774758386" />
   </head>
   <body>
     <div class="page-wrap">
@@ -37,6 +37,16 @@
         <div id="locationChart"></div>
       </section>
 
+      <section class="chart-container" style="text-align: center;">
+        <div class="beeswarm-controls" style="margin-bottom: 10px; display: flex; justify-content: center; align-items: center; gap: 10px;">
+          <span style="color: #e0e0e0; font-weight: 600;">Split Force Distribution By:</span>
+          <button class="b-btn active" data-group="all">All Salaries</button>
+          <button class="b-btn" data-group="experience">Experience Level</button>
+          <button class="b-btn" data-group="size">Company Size</button>
+        </div>
+        <div id="beeswarmChart"></div>
+      </section>
+
       <footer class="page-footer">
         <p>
           Data retrieved from
@@ -49,6 +59,6 @@
     <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-    <script src="main.js?v=1774757167"></script>
+    <script src="main.js?v=1774758385"></script>
   </body>
 </html>

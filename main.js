@@ -620,6 +620,7 @@ function initialize(rawRows) {
 
   function updateLocationChart() {
     renderLocationChart(rows);
+    renderBeeswarmChart(rows);
   }
 
   yearFilter.on("change", update);
@@ -639,3 +640,201 @@ d3.csv("data/salaries.csv")
       .style("font-weight", "600")
       .text("Could not load data/salaries.csv. Make sure you open this with a local server.");
   });
+
+function renderBeeswarmChart(dataRaw) {
+  const root = d3.select("#beeswarmChart");
+  root.selectAll("*").remove();
+
+  const width = 1000;
+  const height = 560;
+  const margin = { top: 40, right: 60, bottom: 60, left: 140 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+
+  const svg = root.append("svg")
+    .attr("viewBox", `0 0 ${width} ${height}`);
+
+  // Chart Title
+  svg.append("text")
+    .attr("x", margin.left)
+    .attr("y", 25)
+    .attr("font-size", "16px")
+    .attr("font-weight", 600)
+    .attr("fill", "#e0e0e0")
+    .text("Salary Distribution force-directed Swarm Plot (Each dot = 1 Data Point)");
+
+  // Random sample if dataset is huge, to keep animations smooth
+  let data = dataRaw;
+  if (data.length > 700) {
+    data = d3.shuffle(data.slice()).slice(0, 700);
+  }
+
+  // Scales
+  const maxSal = d3.max(data, d => d.salary_in_usd);
+  const xScale = d3.scaleLinear()
+    .domain([0, Math.min(maxSal, 350000)]) // cut off long tails slightly for better spread
+    .range([margin.left, width - margin.right])
+    .clamp(true);
+
+  // Group Definitions for Splitting
+  const centerY = height / 2;
+  const groupsY = {
+    all: centerY,
+    experience: {
+      'EN': height * 0.25,
+      'MI': height * 0.45,
+      'SE': height * 0.65,
+      'EX': height * 0.85
+    },
+    size: {
+      'S': height * 0.3,
+      'M': height * 0.55,
+      'L': height * 0.8
+    }
+  };
+
+  const expMap = { 'EN': 'Entry', 'MI': 'Mid', 'SE': 'Senior', 'EX': 'Executive' };
+  const sizeMap = { 'S': 'Small', 'M': 'Medium', 'L': 'Large' };
+
+  // Setup X-Axis
+  svg.append("g")
+      .attr("transform", `translate(0, ${height - margin.bottom / 2})`)
+      .call(d3.axisBottom(xScale).ticks(8).tickFormat(d3.format("$,.0f")))
+      .attr("color", "#a0a0a0")
+      .selectAll("text")
+      .attr("font-size", "12px");
+
+  // X Axis Label
+  svg.append("text")
+      .attr("x", width / 2)
+      .attr("y", height - 2)
+      .attr("text-anchor", "middle")
+      .attr("fill", "#a0a0a0")
+      .attr("font-size", 12)
+      .text("Salary in USD");
+
+  // The layer for the split labels
+  const labelLayer = svg.append("g").attr("class", "y-labels");
+
+  // Draw the actual nodes
+  const radius = 4.5;
+  const colorScale = d3.scaleOrdinal()
+    .domain(['EN', 'MI', 'SE', 'EX'])
+    .range(["#60a5fa", "#34d399", "#fbbf24", "#f87171"]);
+
+  const nodes = svg.append("g")
+    .selectAll("circle")
+    .data(data)
+    .join("circle")
+    .attr("r", radius)
+    .attr("fill", d => colorScale(d.experience_level || "MI"))
+    .attr("stroke", "#121212")
+    .attr("stroke-width", 0.5)
+    .attr("opacity", 0.9)
+    .on("mouseover", function(event, d) {
+       d3.select(this)
+         .attr("stroke", "#ffffff")
+         .attr("stroke-width", 2)
+         .attr("opacity", 1);
+         
+       tooltip.html(
+         `<strong>${d.job_title}</strong><br>` +
+         `Salary: <span style="color:#10b981;font-weight:bold">${d3.format("$,.0f")(d.salary_in_usd)}</span><br>` +
+         `Exp: ${expMap[d.experience_level] || d.experience_level}<br>` +
+         `Size: ${sizeMap[d.company_size] || d.company_size}<br>` +
+         `Location: ${d.company_location}`
+       )
+       .classed("show", true)
+       .attr("aria-hidden", "false");
+       moveTooltip(event);
+    })
+    .on("mousemove", moveTooltip)
+    .on("mouseout", function(event, d) {
+       d3.select(this)
+         .attr("stroke", "#121212")
+         .attr("stroke-width", 0.5)
+         .attr("opacity", 0.9);
+       hideTooltip();
+    });
+
+  // Keep a reference to the simulation so we can stop/update it
+  if (window._beeswarmSim) {
+      window._beeswarmSim.stop();
+  }
+
+  const simulation = d3.forceSimulation(data)
+    .force("x", d3.forceX(d => xScale(d.salary_in_usd)).strength(1))
+    .force("y", d3.forceY(centerY).strength(0.12))
+    .force("collide", d3.forceCollide(radius + 0.5).iterations(2))
+    .alphaDecay(0.035) // let it settle beautifully
+    .on("tick", () => {
+       nodes.attr("cx", d => d.x).attr("cy", d => d.y);
+    });
+
+  window._beeswarmSim = simulation;
+
+  // The Interaction function to split the beeswarm
+  function updateForces(mode) {
+      labelLayer.selectAll("*").remove();
+
+      if (mode === 'all') {
+          simulation.force("y", d3.forceY(centerY).strength(0.12));
+      } else if (mode === 'experience') {
+          const labelsData = [
+              {y: groupsY.experience['EN'], text: 'Entry Level'},
+              {y: groupsY.experience['MI'], text: 'Mid Level'},
+              {y: groupsY.experience['SE'], text: 'Senior'},
+              {y: groupsY.experience['EX'], text: 'Executive'}
+          ];
+          drawYLabels(labelsData);
+          simulation.force("y", d3.forceY(d => groupsY.experience[d.experience_level] || centerY).strength(0.15));
+      } else if (mode === 'size') {
+          const labelsData = [
+              {y: groupsY.size['S'], text: 'Small Co.'},
+              {y: groupsY.size['M'], text: 'Medium Co.'},
+              {y: groupsY.size['L'], text: 'Large Co.'}
+          ];
+          drawYLabels(labelsData);
+          simulation.force("y", d3.forceY(d => groupsY.size[d.company_size] || centerY).strength(0.15));
+      }
+
+      // Heat up the simulation to trigger the animation burst!
+      simulation.alpha(0.8).restart();
+  }
+
+  function drawYLabels(labelData) {
+      // Add subtle background grid line for each group
+      labelLayer.selectAll(".grid-line")
+         .data(labelData)
+         .join("line")
+         .attr("class", "grid-line")
+         .attr("x1", margin.left - 20)
+         .attr("x2", width - margin.right + 20)
+         .attr("y1", d => d.y)
+         .attr("y2", d => d.y)
+         .attr("stroke", "#334155")
+         .attr("stroke-dasharray", "4,4");
+
+      labelLayer.selectAll(".cat-label")
+         .data(labelData)
+         .join("text")
+         .attr("class", "cat-label")
+         .attr("x", margin.left - 15)
+         .attr("y", d => d.y)
+         .attr("dy", "0.35em")
+         .attr("text-anchor", "end")
+         .attr("fill", "#e0e0e0")
+         .attr("font-size", "14px")
+         .attr("font-weight", 600)
+         .text(d => d.text);
+  }
+
+  // Hook up external buttons
+  d3.selectAll(".b-btn").on("click", function() {
+      const btn = d3.select(this);
+      d3.selectAll(".b-btn").classed("active", false);
+      btn.classed("active", true);
+      const mode = btn.attr("data-group");
+      updateForces(mode);
+  });
+}
