@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CSC316 A3 - Salary Explorer (MVP)</title>
+    <title>CSC316 A3 - Salary Explorer</title>
     <link rel="stylesheet" href="style.css?v=1774758386" />
   </head>
   <body>
@@ -11,11 +11,14 @@
       <header class="topbar">
         <h2>Salary Explorer</h2>
         <p class="subtitle">
-          Exploring tech job salaries from 2020 to 2024. You can use the dropdowns below
-          to filter the data by experience level and year. (Try hovering over the bars to
-          see my custom 'money rain' animation!)
+          Exploring tech job salaries from 2020 to 2024. Use the dropdowns below
+          to filter the data by experience level and work year.
         </p>
       </header>
+
+      <section class="chart-container">
+        <div id="locationChart"></div>
+      </section>
 
       <section class="controls" aria-label="Chart filters">
         <label>
@@ -31,10 +34,6 @@
 
       <section class="chart-container">
         <div id="chart"></div>
-      </section>
-
-      <section class="chart-container">
-        <div id="locationChart"></div>
       </section>
 
       <section class="chart-container" style="text-align: center;">
@@ -59,6 +58,6 @@
     <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-    <script src="main.js?v=1774758777"></script>
+    <script src="main.js?v=1774759728"></script>
   </body>
 </html>

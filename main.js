@@ -66,7 +66,6 @@ let activeMoneyRain = {
   barTopY: 0
 };
 
-// label map for experience codes
 const experienceLabelMap = {
   EN: "Entry-level",
   MI: "Mid-level",
@@ -133,11 +132,11 @@ function renderLocationChart(data) {
   
   svg2.append("text")
     .attr("x", margin.left)
-    .attr("y", 10)
+    .attr("y", 24)
     .attr("font-size", 16)
     .attr("font-weight", 600)
     .attr("fill", "#e0e0e0")
-    .text(`Top 15 Countries by Average Salary (Click to cross-filter Dashboard!)`);
+    .text(`Top 15 Countries by Average Salary (Select a Country to Filter Dashboard)`);
 
   const aggLocMap = d3.rollup(
     data,
@@ -157,8 +156,7 @@ function renderLocationChart(data) {
   
   let aggLoc = [];
   for (const [country, stats] of aggLocMap.entries()) {
-    if (stats.count >= 3) { // filter out extreme noise
-      aggLoc.push({ country: country, ...stats });
+    if (stats.count >= 3) { aggLoc.push({ country: country, ...stats });
     }
   }
   aggLoc.sort((a,b) => b.avg_salary - a.avg_salary);
@@ -223,14 +221,12 @@ function renderLocationChart(data) {
        hideTooltip();
     })
     .on("click", function(event, d) {
-       // Toggle global filter
        if (globalLocationFilter === d.country) {
            globalLocationFilter = null;
        } else {
            globalLocationFilter = d.country;
        }
        
-       // Visual feedback on selected bubbles
        g2.selectAll(".bubble-group").each(function(bd) {
            const isSelected = globalLocationFilter === bd.country;
            const isDimmed = globalLocationFilter !== null && !isSelected;
@@ -291,7 +287,6 @@ function renderLocationChart(data) {
   });
 }
 function showTooltip(event, d) {
-  // figure out the rank for the tooltip from what's currently on screen
   const displayedBars = g.selectAll("rect.bar").data();
   let rankIndex = -1;
   for (let i = 0; i < displayedBars.length; i++) {
@@ -311,7 +306,6 @@ function showTooltip(event, d) {
       `<strong>${d.job_title}</strong><br>` +
         `Average: ${usdFormatter(d.avgSalary)}<br>` +
         `Records: ${d.count}<br>` +
-        // append rank info
         `${rankText}`
     )
     .classed("show", true)
@@ -400,7 +394,6 @@ function spawnMoneyNoteForBar(datum) {
 }
 
 function startMoneyRain(datum) {
-  // keep one rain loop active
   stopMoneyRain(true);
   activeMoneyRain.jobTitle = datum.job_title;
   activeMoneyRain.barTopY = yScale(datum.avgSalary);
@@ -436,18 +429,15 @@ function startMoneyRain(datum) {
 }
 
 function renderChart(data, selectedYear, selectedExp) {
-  // reset old rain when chart updates
   stopMoneyRain(true);
 
   const topN = 12;
   let chartData = data.slice();
   
-  // Sort from highest to lowest salary
   chartData.sort(function(a, b) {
     return b.avgSalary - a.avgSalary;
   });
   
-  // Take top N
   chartData = chartData.slice(0, topN);
 
   const maxVal = d3.max(chartData, (d) => d.avgSalary) || 1;
@@ -501,12 +491,11 @@ function renderChart(data, selectedYear, selectedExp) {
 
   bars
     .on("mouseover", function (event, d) {
-      // Interrupt any running transition so hover applies instantly
       d3.select(this).interrupt();
       
       d3.select(this)
-        .style("fill", "transparent") // completely transparent via style
-        .attr("fill", "none") // and attr, just to be safe
+        .style("fill", "transparent") 
+        .attr("fill", "none") 
         .attr("stroke", colorScale(d.avgSalary))
         .attr("stroke-width", "2px");
 
@@ -518,13 +507,12 @@ function renderChart(data, selectedYear, selectedExp) {
       d3.select(this).interrupt();
       
       d3.select(this)
-        .style("fill", null) // remove style override
-        .attr("fill", colorScale(d.avgSalary)) // restore attr
+        .style("fill", null) 
+        .attr("fill", colorScale(d.avgSalary)) 
         .attr("stroke", "none")
         .attr("stroke-width", "0px");
 
       hideTooltip();
-      // stop and clear rain
       stopMoneyRain(true);
     })
     .transition(t)
@@ -614,34 +602,28 @@ function initialize(rawRows) {
     const selectedYear = yearFilter.property("value");
     const selectedExp = experienceFilter.property("value");
     
-    // Apply Global Cross-Filter (from Location Bubble Chart)
     const locationFilteredRows = globalLocationFilter 
         ? rows.filter(d => d.company_location === globalLocationFilter)
         : rows;
 
-    // Dynamically rebuild aggregates so the Bar chart reflects the location!
     const dynamicAggregates = buildAggregates(locationFilteredRows);
     const chartData = flattenAggregateForSelection(dynamicAggregates, selectedYear, selectedExp);
     
     renderChart(chartData, selectedYear, selectedExp);
     
-    // Pass filtered data down to Beeswarm
     if (typeof renderBeeswarmChart === "function") {
-        // preserve the current split mode from buttons if possible
         let activeMode = 'all';
         const activeBtn = d3.select(".b-btn.active");
         if (!activeBtn.empty()) activeMode = activeBtn.attr("data-group");
         
         renderBeeswarmChart(locationFilteredRows);
         
-        // Retrigger forces to maintain current visual state
         if (window._beeswarmUpdateForces) {
             window._beeswarmUpdateForces(activeMode);
         }
     }
   }
 
-  // Expose it globally so Bubble Chart click can trigger it
   window.triggerGlobalUpdate = update;
 
 
@@ -681,7 +663,6 @@ function renderBeeswarmChart(dataRaw) {
   const svg = root.append("svg")
     .attr("viewBox", `0 0 ${width} ${height}`);
 
-  // Chart Title
   svg.append("text")
     .attr("x", margin.left)
     .attr("y", 25)
@@ -690,20 +671,17 @@ function renderBeeswarmChart(dataRaw) {
     .attr("fill", "#e0e0e0")
     .text("Salary Distribution force-directed Swarm Plot (Each dot = 1 Data Point)");
 
-  // Random sample if dataset is huge, to keep animations smooth
   let data = dataRaw;
   if (data.length > 700) {
     data = d3.shuffle(data.slice()).slice(0, 700);
   }
 
-  // Scales
   const maxSal = d3.max(data, d => d.salary_in_usd);
   const xScale = d3.scaleLinear()
-    .domain([0, Math.min(maxSal, 350000)]) // cut off long tails slightly for better spread
+    .domain([0, Math.min(maxSal, 350000)]) 
     .range([margin.left, width - margin.right])
     .clamp(true);
 
-  // Group Definitions for Splitting
   const centerY = height / 2;
   const groupsY = {
     all: centerY,
@@ -723,7 +701,6 @@ function renderBeeswarmChart(dataRaw) {
   const expMap = { 'EN': 'Entry', 'MI': 'Mid', 'SE': 'Senior', 'EX': 'Executive' };
   const sizeMap = { 'S': 'Small', 'M': 'Medium', 'L': 'Large' };
 
-  // Setup X-Axis
   svg.append("g")
       .attr("transform", `translate(0, ${height - margin.bottom / 2})`)
       .call(d3.axisBottom(xScale).ticks(8).tickFormat(d3.format("$,.0f")))
@@ -731,7 +708,6 @@ function renderBeeswarmChart(dataRaw) {
       .selectAll("text")
       .attr("font-size", "12px");
 
-  // X Axis Label
   svg.append("text")
       .attr("x", width / 2)
       .attr("y", height - 2)
@@ -740,10 +716,8 @@ function renderBeeswarmChart(dataRaw) {
       .attr("font-size", 12)
       .text("Salary in USD");
 
-  // The layer for the split labels
   const labelLayer = svg.append("g").attr("class", "y-labels");
 
-  // Draw the actual nodes
   const radius = 4.5;
   const colorScale = d3.scaleOrdinal()
     .domain(['EN', 'MI', 'SE', 'EX'])
@@ -784,7 +758,6 @@ function renderBeeswarmChart(dataRaw) {
        hideTooltip();
     });
 
-  // Keep a reference to the simulation so we can stop/update it
   if (window._beeswarmSim) {
       window._beeswarmSim.stop();
   }
@@ -793,14 +766,13 @@ function renderBeeswarmChart(dataRaw) {
     .force("x", d3.forceX(d => xScale(d.salary_in_usd)).strength(1))
     .force("y", d3.forceY(centerY).strength(0.12))
     .force("collide", d3.forceCollide(radius + 0.5).iterations(2))
-    .alphaDecay(0.035) // let it settle beautifully
+    .alphaDecay(0.035) 
     .on("tick", () => {
        nodes.attr("cx", d => d.x).attr("cy", d => d.y);
     });
 
   window._beeswarmSim = simulation;
 
-  // The Interaction function to split the beeswarm
   function updateForces(mode) {
       window._beeswarmUpdateForces = updateForces;
       labelLayer.selectAll("*").remove();
@@ -826,12 +798,10 @@ function renderBeeswarmChart(dataRaw) {
           simulation.force("y", d3.forceY(d => groupsY.size[d.company_size] || centerY).strength(0.15));
       }
 
-      // Heat up the simulation to trigger the animation burst!
       simulation.alpha(0.8).restart();
   }
 
   function drawYLabels(labelData) {
-      // Add subtle background grid line for each group
       labelLayer.selectAll(".grid-line")
          .data(labelData)
          .join("line")
@@ -857,7 +827,6 @@ function renderBeeswarmChart(dataRaw) {
          .text(d => d.text);
   }
 
-  // Hook up external buttons
   d3.selectAll(".b-btn").on("click", function() {
       const btn = d3.select(this);
       d3.selectAll(".b-btn").classed("active", false);
