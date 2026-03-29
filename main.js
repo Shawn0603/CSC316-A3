@@ -1,3 +1,4 @@
+let globalLocationFilter = null;
 const chartRoot = d3.select("#chart");
 const tooltip = d3.select("#tooltip");
 const experienceFilter = d3.select("#experienceFilter");
@@ -122,11 +123,7 @@ function renderLocationChart(data) {
     .attr("y", "-30%")
     .attr("width", "160%")
     .attr("height", "160%");
-    
-  glowFilter.append("feGaussianBlur")
-    .attr("stdDeviation", "6")
-    .attr("result", "blur");
-    
+  glowFilter.append("feGaussianBlur").attr("stdDeviation", "6").attr("result", "blur");
   const feMerge = glowFilter.append("feMerge");
   feMerge.append("feMergeNode").attr("in", "blur");
   feMerge.append("feMergeNode").attr("in", "SourceGraphic");
@@ -136,100 +133,116 @@ function renderLocationChart(data) {
   
   svg2.append("text")
     .attr("x", margin.left)
-    .attr("y", 24)
+    .attr("y", 10)
     .attr("font-size", 16)
     .attr("font-weight", 600)
     .attr("fill", "#e0e0e0")
-    .text(`Top 5 Countries by Average Salary`);
+    .text(`Top 15 Countries by Average Salary (Click to cross-filter Dashboard!)`);
 
   const aggLocMap = d3.rollup(
     data,
-    v => d3.mean(v, d => d.salary_in_usd),
+    v => {
+      let jobCounts = {};
+      v.forEach(x => { jobCounts[x.job_title] = (jobCounts[x.job_title] || 0) + 1; });
+      let topJob = Object.keys(jobCounts).reduce((a,b) => jobCounts[a] > jobCounts[b] ? a : b, "Unknown");
+      return {
+        avg_salary: d3.mean(v, d => d.salary_in_usd),
+        max_salary: d3.max(v, d => d.salary_in_usd),
+        count: v.length,
+        top_job: topJob
+      };
+    },
     d => d.company_location
   );
   
   let aggLoc = [];
-  for (const [country, avg_salary] of aggLocMap.entries()) {
-    aggLoc.push({ country: country, avg_salary: avg_salary });
+  for (const [country, stats] of aggLocMap.entries()) {
+    if (stats.count >= 3) { // filter out extreme noise
+      aggLoc.push({ country: country, ...stats });
+    }
   }
-  
-  aggLoc.sort(function(a, b) {
-    return b.avg_salary - a.avg_salary;
-  });
-  
-  aggLoc = aggLoc.slice(0, 5);
+  aggLoc.sort((a,b) => b.avg_salary - a.avg_salary);
+  aggLoc = aggLoc.slice(0, 15);
 
   const maxVal = d3.max(aggLoc, d => d.avg_salary) || 0;
-
-  const rScale = d3.scaleSqrt().domain([0, maxVal]).range([20, 110]);
+  const rScale = d3.scaleSqrt().domain([0, maxVal]).range([15, 75]);
   const colorScale = d3.scaleSequential(d3.interpolateCool).domain([0, maxVal]);
 
   const gradients = defs.selectAll("radialGradient")
     .data(aggLoc)
     .join("radialGradient")
     .attr("id", d => `grad-${d.country}`)
-    .attr("cx", "30%")
-    .attr("cy", "30%")
-    .attr("r", "70%");
+    .attr("cx", "30%").attr("cy", "30%").attr("r", "70%");
 
-  gradients.append("stop")
-    .attr("offset", "0%")
-    .attr("stop-color", d => d3.color(colorScale(d.avg_salary)).brighter(1.2))
-    .attr("stop-opacity", 1);
+  gradients.append("stop").attr("offset", "0%").attr("stop-color", d => d3.color(colorScale(d.avg_salary)).brighter(1.2)).attr("stop-opacity", 1);
+  gradients.append("stop").attr("offset", "100%").attr("stop-color", d => colorScale(d.avg_salary)).attr("stop-opacity", 1);
 
-  gradients.append("stop")
-    .attr("offset", "100%")
-    .attr("stop-color", d => colorScale(d.avg_salary))
-    .attr("stop-opacity", 1);
-
-  if (window.locSimulation) {
-    window.locSimulation.stop();
-  }
+  if (window.locSimulation) window.locSimulation.stop();
 
   window.locSimulation = d3.forceSimulation(aggLoc)
     .force("collide", d3.forceCollide().radius(d => rScale(d.avg_salary) + 2).iterations(4).strength(1))
-    .force("x", d3.forceX(innerWidth / 2).strength(0.01))
-    .force("y", d3.forceY(innerHeight / 2).strength(0.01))
+    .force("x", d3.forceX(innerWidth / 2).strength(0.015))
+    .force("y", d3.forceY(innerHeight / 2).strength(0.015))
     .alphaDecay(0);
 
-  const nodes = g2.selectAll("g")
+  const nodes = g2.selectAll(".bubble-group")
     .data(aggLoc)
     .join("g")
-    .style("cursor", "grab")
-    .call(d3.drag()
+    .attr("class", "bubble-group")
+    .style("cursor", "grab");
+    
+  nodes.call(d3.drag()
       .on("start", (event, d) => { d.fx = d.x; d.fy = d.y; d3.select(event.sourceEvent.target.parentNode).style("cursor", "grabbing"); })
       .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
       .on("end", (event, d) => { d.fx = null; d.fy = null; d3.select(event.sourceEvent.target.parentNode).style("cursor", "grab"); })
-    )
-    .on("mouseover", function(event, d) {
-      d3.select(this).select("circle")
-        .transition().duration(200)
-        .attr("r", rScale(d.avg_salary) * 1.05)
-        .attr("stroke-opacity", 0.8)
-        .attr("stroke-width", 2);
-        
-      d3.select(this).select("tspan.country-text")
-        .transition().duration(200)
-        .style("font-size", "16px");
+  );
 
-      d3.select(this).select("tspan.salary-text")
-        .transition().duration(200)
-        .style("font-size", "18px");
+  nodes.on("mouseover", function(event, d) {
+       d3.select(this).select("circle")
+         .transition().duration(200)
+         .attr("r", rScale(d.avg_salary) * 1.05);
+
+       let cName = d.country;
+       try { cName = regionNames.of(d.country) || d.country; } catch(e){}
+       
+       tooltip.html(
+         `<strong>${getFlagEmoji(d.country)} ${cName}</strong><br>` +
+         `Avg Salary: <span style="color:#10b981;font-weight:bold">${usdFormatter(d.avg_salary)}</span><br>` +
+         `Max Salary: ${usdFormatter(d.max_salary)}<br>` +
+         `Top Job: ${d.top_job}<br>` +
+         `Records: ${d.count}<br>` +
+         `<span style="color:#fbbf24;font-size:11px;font-style:italic;">(Click to filter Dashboard!)</span>`
+       )
+       .classed("show", true)
+       .attr("aria-hidden", "false");
+       moveTooltip(event);
     })
+    .on("mousemove", moveTooltip)
     .on("mouseout", function(event, d) {
-      d3.select(this).select("circle")
-        .transition().duration(200)
-        .attr("r", rScale(d.avg_salary))
-        .attr("stroke-opacity", 0.3)
-        .attr("stroke-width", 1);
-        
-      d3.select(this).select("tspan.country-text")
-        .transition().duration(200)
-        .style("font-size", "14px");
+       d3.select(this).select("circle").transition().duration(200).attr("r", rScale(d.avg_salary));
+       hideTooltip();
+    })
+    .on("click", function(event, d) {
+       // Toggle global filter
+       if (globalLocationFilter === d.country) {
+           globalLocationFilter = null;
+       } else {
+           globalLocationFilter = d.country;
+       }
+       
+       // Visual feedback on selected bubbles
+       g2.selectAll(".bubble-group").each(function(bd) {
+           const isSelected = globalLocationFilter === bd.country;
+           const isDimmed = globalLocationFilter !== null && !isSelected;
+           
+           d3.select(this).select("circle")
+             .transition().duration(300)
+             .attr("stroke", isSelected ? "#fcd34d" : "#ffffff")
+             .attr("stroke-width", isSelected ? 4 : 1)
+             .attr("opacity", isDimmed ? 0.2 : 1);
+       });
 
-      d3.select(this).select("tspan.salary-text")
-        .transition().duration(200)
-        .style("font-size", "16px");
+       if(window.triggerGlobalUpdate) window.triggerGlobalUpdate();
     });
 
   nodes.append("circle")
@@ -237,7 +250,7 @@ function renderLocationChart(data) {
     .attr("fill", d => `url(#grad-${d.country})`)
     .style("filter", "url(#glow)")
     .attr("stroke", "#ffffff")
-    .attr("stroke-opacity", 0.3)
+    .attr("stroke-opacity", 0.8)
     .attr("stroke-width", 1);
 
   const texts = nodes.append("text")
@@ -250,35 +263,25 @@ function renderLocationChart(data) {
   texts.append("tspan")
     .attr("class", "country-text")
     .attr("x", 0)
-    .attr("dy", "-0.5em")
+    .attr("dy", "-0.8em")
     .style("font-size", "14px")
     .style("font-weight", "500")
-    .text(d => {
-      let fullName = d.country;
-      try {
-        fullName = regionNames.of(d.country) || d.country;
-      } catch (e) {
-        fullName = d.country;
-      }
-      return `${getFlagEmoji(d.country)} ${fullName}`;
-    });
+    .text(d => getFlagEmoji(d.country));
 
   texts.append("tspan")
     .attr("class", "salary-text")
     .attr("x", 0)
-    .attr("dy", "1.3em")
-    .style("font-size", "16px")
+    .attr("dy", "1.2em")
+    .style("font-size", "14px")
     .style("font-weight", "800")
-    .text(d => d3.format("$,.0f")(d.avg_salary));
+    .text(d => usdFormatter(d.avg_salary));
 
   window.locSimulation.on("tick", () => {
     for (let i = 0; i < aggLoc.length; i++) {
       let d = aggLoc[i];
       let r = rScale(d.avg_salary);
-      
       d.vx += (Math.random() - 0.5) * 0.4;
       d.vy += (Math.random() - 0.5) * 0.4;
-
       if (d.x - r < 0) { d.x = r; d.vx *= -1; }
       if (d.x + r > innerWidth) { d.x = innerWidth - r; d.vx *= -1; }
       if (d.y - r < 0) { d.y = r; d.vy *= -1; }
@@ -287,7 +290,6 @@ function renderLocationChart(data) {
     nodes.attr("transform", d => `translate(${d.x}, ${d.y})`);
   });
 }
-
 function showTooltip(event, d) {
   // figure out the rank for the tooltip from what's currently on screen
   const displayedBars = g.selectAll("rect.bar").data();
@@ -608,15 +610,40 @@ function initialize(rawRows) {
   yearFilter.property("value", allYears[allYears.length - 1]);
   experienceFilter.property("value", "SE");
 
-  const aggregates = buildAggregates(rows);
-
   function update() {
     const selectedYear = yearFilter.property("value");
     const selectedExp = experienceFilter.property("value");
+    
+    // Apply Global Cross-Filter (from Location Bubble Chart)
+    const locationFilteredRows = globalLocationFilter 
+        ? rows.filter(d => d.company_location === globalLocationFilter)
+        : rows;
 
-    const chartData = flattenAggregateForSelection(aggregates, selectedYear, selectedExp);
+    // Dynamically rebuild aggregates so the Bar chart reflects the location!
+    const dynamicAggregates = buildAggregates(locationFilteredRows);
+    const chartData = flattenAggregateForSelection(dynamicAggregates, selectedYear, selectedExp);
+    
     renderChart(chartData, selectedYear, selectedExp);
+    
+    // Pass filtered data down to Beeswarm
+    if (typeof renderBeeswarmChart === "function") {
+        // preserve the current split mode from buttons if possible
+        let activeMode = 'all';
+        const activeBtn = d3.select(".b-btn.active");
+        if (!activeBtn.empty()) activeMode = activeBtn.attr("data-group");
+        
+        renderBeeswarmChart(locationFilteredRows);
+        
+        // Retrigger forces to maintain current visual state
+        if (window._beeswarmUpdateForces) {
+            window._beeswarmUpdateForces(activeMode);
+        }
+    }
   }
+
+  // Expose it globally so Bubble Chart click can trigger it
+  window.triggerGlobalUpdate = update;
+
 
   function updateLocationChart() {
     renderLocationChart(rows);
@@ -775,6 +802,7 @@ function renderBeeswarmChart(dataRaw) {
 
   // The Interaction function to split the beeswarm
   function updateForces(mode) {
+      window._beeswarmUpdateForces = updateForces;
       labelLayer.selectAll("*").remove();
 
       if (mode === 'all') {
