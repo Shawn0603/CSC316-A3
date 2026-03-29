@@ -136,7 +136,7 @@ function renderLocationChart(data) {
   
   svg2.append("text")
     .attr("x", margin.left)
-    .attr("y", -10)
+    .attr("y", 24)
     .attr("font-size", 16)
     .attr("font-weight", 600)
     .attr("fill", "#e0e0e0")
